@@ -19,19 +19,21 @@ st.caption("Produced by LuvisYouth AI")
 def check_password():
     """Returns `True` if the user had the correct password."""
     
-    # 1. Check if password is defined in secrets.toml (for Cloud)
-    #    If not, use default "1234" for local testing
+    # 1. 開発/本番環境のパスワード設定
+    # Streamlitの「Secrets」機能を使用して、コード上にはパスワードを書かないようにします。
+    # ローカル実行時: .streamlit/secrets.toml に password = "xxx" と記述してください。
+    # クラウド実行時: Streamlit Cloudの管理画面から Secrets に設定してください。
     try:
         if "password" in st.secrets:
             correct_password = st.secrets["password"]
         else:
-            correct_password = "1234" # Default for local
-    except FileNotFoundError:
-        # secrets.toml not found
-        correct_password = "1234"
+            # Secretsはあるがパスワードキーがない場合
+            st.error("⚠️ パスワード設定(Secrets)が見つかりません。")
+            st.stop()
     except Exception:
-        # Other potential issues (e.g. StreamlitSecretNotFoundError)
-        correct_password = "1234"
+        # Secrets自体が未設定の場合（ローカル初期状態など）
+        st.info("💡 初期設定が必要です。プロジェクトフォルダの `.streamlit/secrets.toml` ファイルに `password = \"好きな文字\"` を追記してください。")
+        st.stop()
 
     if "password_correct" not in st.session_state:
         st.session_state.password_correct = False
@@ -198,7 +200,25 @@ with col_editor:
             
             cat_presets = {k: v for k, v in PRESETS.items() if k.startswith(selected_cat)}
             selected_preset_key = st.selectbox("演出スタイル", list(cat_presets.keys()), format_func=lambda x: PRESETS[x]["display_name"])
-            preset_data = PRESETS[selected_preset_key]
+            preset_data = PRESETS[selected_preset_key].copy() # Copy to avoid mutating original presets
+            
+            # --- Color Customization Overrides ---
+            st.markdown("🎨 **色カスタマイズ (オプション)**")
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                custom_text_color = st.color_picker("文字色", preset_data.get("text_color", "#FFFFFF"))
+            with cc2:
+                # Use current bg color as default, or #000000 if None
+                default_bg = preset_data.get("text_bg_color") or "#000000"
+                has_bg = st.checkbox("背景あり", value=preset_data.get("text_bg_color") is not None)
+                if has_bg:
+                    custom_bg_color = st.color_picker("背景色", default_bg)
+                else:
+                    custom_bg_color = None
+            
+            # Apply overrides
+            preset_data["text_color"] = custom_text_color
+            preset_data["text_bg_color"] = custom_bg_color
             
         with c2:
             # BGM
