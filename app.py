@@ -140,6 +140,7 @@ bgm_data = get_bgm_files()
 
 with st.sidebar:
     st.image("assets/logo.png", width=100) # Show App Logo if exists
+    st.divider()
     st.markdown("### ⚙️ 設定・構成")
     
     # 1. 解像度選択 (Resolution)
