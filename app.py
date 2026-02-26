@@ -5,7 +5,10 @@ import tempfile
 from pathlib import Path
 from config import PRESETS
 import video_utils
-import download_bgm
+try:
+    import download_bgm
+except ImportError:
+    download_bgm = None
 
 
 st.set_page_config(page_title="インスタ・リール自動生成ツール", layout="wide")
@@ -147,11 +150,13 @@ with st.sidebar:
     total_tracks = sum(len(tracks) for tracks in bgm_data.values())
     
     if total_tracks < 10:
-        st.info(f"🎵 BGMのセットアップが必要です (現在 {total_tracks} 曲)")
         if st.button("BGMを自動セットアップ"):
-            with st.spinner("ダウンロード中..."):
-                download_bgm.download_bgm()
-                st.rerun()
+            if download_bgm:
+                with st.spinner("ダウンロード中..."):
+                    download_bgm.download_bgm()
+                    st.rerun()
+            else:
+                st.error("エラー: `download_bgm.py` が見つかりません。GitHubにファイルをアップロードしてください。")
 
     st.divider()
     st.markdown("### ⚙️ 設定・構成")
