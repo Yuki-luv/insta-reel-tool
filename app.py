@@ -144,8 +144,10 @@ with st.sidebar:
     
     # --- Smart BGM Auto-Setup (Hidden if ready) ---
     bgm_data = get_bgm_files()
-    if not bgm_data:
-        st.info("🎵 BGMの初期セットアップが必要です")
+    total_tracks = sum(len(tracks) for tracks in bgm_data.values())
+    
+    if total_tracks < 10:
+        st.info(f"🎵 BGMのセットアップが必要です (現在 {total_tracks} 曲)")
         if st.button("BGMを自動セットアップ"):
             with st.spinner("ダウンロード中..."):
                 download_bgm.download_bgm()
