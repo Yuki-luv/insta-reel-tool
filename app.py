@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from config import PRESETS
 import video_utils
+import download_bgm
 
 
 st.set_page_config(page_title="インスタ・リール自動生成ツール", layout="wide")
@@ -140,6 +141,16 @@ bgm_data = get_bgm_files()
 
 with st.sidebar:
     st.image("assets/logo.png", width=100) # Show App Logo if exists
+    
+    # --- Smart BGM Auto-Setup (Hidden if ready) ---
+    bgm_data = get_bgm_files()
+    if not bgm_data:
+        st.info("🎵 BGMの初期セットアップが必要です")
+        if st.button("BGMを自動セットアップ"):
+            with st.spinner("ダウンロード中..."):
+                download_bgm.download_bgm()
+                st.rerun()
+
     st.divider()
     st.markdown("### ⚙️ 設定・構成")
     
