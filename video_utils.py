@@ -8,6 +8,7 @@ from moviepy.editor import (
     vfx, transfx, concatenate_videoclips
 )
 from moviepy.video.fx.all import crop, resize
+from pilmoji import Pilmoji
 # Try import audio_loop
 try:
     from moviepy.audio.fx.all import audio_loop
@@ -118,19 +119,8 @@ def add_watermark(video_clip, logo_path="assets/logo.png", opacity=0.3):
     return CompositeVideoClip([video_clip, logo], size=video_clip.size)
 
 # ============================================================
-# 📝 Text Overlay (via PIL)
+# 📝 Text Overlay (via PIL & Pilmoji)
 # ============================================================
-
-def get_emoji_font_path():
-    """システムから絵文字フォントを探す (Windows/macOS/Linux)"""
-    if os.name == 'nt': # Windows
-        paths = [
-            "C:\\Windows\\Fonts\\seguiemj.ttf", # Segoe UI Emoji
-            "C:\\Windows\\Fonts\\symbol.ttf"
-        ]
-        for p in paths:
-            if os.path.exists(p): return p
-    return None
 
 def wrap_text(text, font, max_width):
     """
@@ -193,17 +183,7 @@ def create_text_image(text, font_path, fontsize=60, color='white', bg_color=None
 
     # 2. 描画
     img = Image.new('RGBA', size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
     
-    # 絵文字フォントの準備
-    emoji_font = None
-    emoji_font_path = get_emoji_font_path()
-    if emoji_font_path:
-        try:
-            emoji_font = ImageFont.truetype(emoji_font_path, current_fontsize)
-        except:
-            pass
-
     # 中央配置のための開始位置
     current_y = (area_h - total_h) / 2
     
@@ -211,36 +191,33 @@ def create_text_image(text, font_path, fontsize=60, color='white', bg_color=None
     if color.lower() in ['black', '#000000', '#000'] or (color.startswith('#') and color.lower() < '#444'):
         stroke_color = 'white'
 
-    for line in lines:
-        if not line:
-            current_y += current_fontsize + line_spacing
-            continue
+    with Pilmoji(img) as pilmoji:
+        for line in lines:
+            if not line:
+                current_y += current_fontsize + line_spacing
+                continue
+                
+            bbox = font.getbbox(line)
+            line_w = bbox[2] - bbox[0]
+            line_h = bbox[3] - bbox[1]
+            current_x = (area_w - line_w) / 2
             
-        bbox = font.getbbox(line)
-        line_w = bbox[2] - bbox[0]
-        line_h = bbox[3] - bbox[1]
-        current_x = (area_w - line_w) / 2
-        
-        # 背景矩形 (行単位)
-        if bg_color:
-            padding = 10
-            draw.rectangle(
-                [current_x - padding, current_y, current_x + line_w + padding, current_y + line_h + padding],
-                fill=bg_color
-            )
-            
-        # 文字描画 (絵文字対応の試み)
-        # PILの標準draw.textは統合された絵文字をうまく扱えない場合があるが、
-        # 最近のバージョン + 適切なフォント指定で改善される
-        try:
-            # emoji_fontがある場合はそれを使う（PIL.ImageDraw.textのfont引数は1つのみ）
-            # ここではメインフォントで描画を試みる
-            draw.text((current_x, current_y), line, font=font, fill=color, stroke_width=4, stroke_fill=stroke_color)
-        except:
-            # フォールバック
-            draw.text((current_x, current_y), line, font=font, fill=color)
-            
-        current_y += line_h + line_spacing
+            # 背景矩形 (行単位)
+            if bg_color:
+                padding = 10
+                # Pilmojiの背後にあるImageDrawを直接使うことはできないので、
+                # 事前にimgに対して背景を描画するか、pilmojiオブジェクト経由で描画が必要な場合がある。
+                # 幸いpilmoji.imageは元のimg。
+                draw = ImageDraw.Draw(img)
+                draw.rectangle(
+                    [current_x - padding, current_y, current_x + line_w + padding, current_y + line_h + padding],
+                    fill=bg_color
+                )
+                
+            # 文字描画 (Pilmojiなら絵文字が自動的に置換される)
+            pilmoji.text((current_x, current_y), line, font=font, fill=color, stroke_width=4, stroke_fill=stroke_color)
+                
+            current_y += line_h + line_spacing
     
     return np.array(img)
 
