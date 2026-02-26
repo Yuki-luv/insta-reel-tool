@@ -218,16 +218,18 @@ with col_editor:
             
             # --- Color Customization Overrides ---
             st.markdown("🎨 **色カスタマイズ (オプション)**")
-            cc1, cc2 = st.columns(2)
-            with cc1:
+            cc_cols = st.columns([1, 1, 1])
+            with cc_cols[0]:
                 custom_text_color = st.color_picker("文字色", preset_data.get("text_color", "#FFFFFF"))
-            with cc2:
-                # Use current bg color as default, or #000000 if None
-                default_bg = preset_data.get("text_bg_color") or "#000000"
+            with cc_cols[1]:
                 has_bg = st.checkbox("背景あり", value=preset_data.get("text_bg_color") is not None)
+                preset_data["text_bg_color_enabled"] = has_bg
+            with cc_cols[2]:
                 if has_bg:
+                    default_bg = preset_data.get("text_bg_color") or "#000000"
                     custom_bg_color = st.color_picker("背景色", default_bg)
                 else:
+                    st.write("") # Spacer
                     custom_bg_color = None
             
             # Apply overrides
@@ -296,7 +298,8 @@ with col_editor:
                         preview_container.markdown(html, unsafe_allow_html=True)
                     
                     # Text Input full width below image
-                    txt = st.text_input(f"テキスト {scene_idx+1}", placeholder="文字を入力...", key=f"txt_{scene_idx}", label_visibility="collapsed")
+                    # Text Area for manual wrapping / long text
+                    txt = st.text_area(f"テキスト {scene_idx+1}", placeholder="文字を入力...", key=f"txt_{scene_idx}", label_visibility="collapsed", height=80)
                     
                 st.divider()
                 

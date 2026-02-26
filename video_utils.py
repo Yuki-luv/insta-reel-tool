@@ -121,58 +121,126 @@ def add_watermark(video_clip, logo_path="assets/logo.png", opacity=0.3):
 # 📝 Text Overlay (via PIL)
 # ============================================================
 
+def get_emoji_font_path():
+    """システムから絵文字フォントを探す (Windows/macOS/Linux)"""
+    if os.name == 'nt': # Windows
+        paths = [
+            "C:\\Windows\\Fonts\\seguiemj.ttf", # Segoe UI Emoji
+            "C:\\Windows\\Fonts\\symbol.ttf"
+        ]
+        for p in paths:
+            if os.path.exists(p): return p
+    return None
+
+def wrap_text(text, font, max_width):
+    """
+    指定された幅に収まるようにテキストを改行する
+    """
+    lines = []
+    # ユーザーが入力した改行を尊重
+    for paragraph in text.split('\n'):
+        words = list(paragraph) # 日本語の場合は文字単位で分割
+        if not words:
+            lines.append("")
+            continue
+            
+        current_line = ""
+        for word in words:
+            test_line = current_line + word
+            # textbboxで幅を確認
+            bbox = font.getbbox(test_line)
+            if bbox[2] - bbox[0] <= max_width:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = word
+        lines.append(current_line)
+    return lines
+
 def create_text_image(text, font_path, fontsize=60, color='white', bg_color=None, size=(1080, 400)):
     """
-    PILを使ってテキスト画像を生成し、ImageClipとして返す
+    PILを使ってテキスト画像を生成し、ImageClipとして返す (改行・見切れ防止対応)
     """
     if not text:
         return None
         
-    # キャンバス作成 (透明)
+    line_spacing = 10
+    area_w, area_h = size
+    max_text_w = area_w * 0.9 # 左右に5%ずつのマージン
+    
+    # 1. 最適なフォントサイズを決定 (領域に収まるまで小さくする)
+    current_fontsize = fontsize
+    while current_fontsize > 20:
+        try:
+            font = ImageFont.truetype(font_path, current_fontsize)
+        except OSError:
+            font = ImageFont.load_default()
+        
+        # テキストをラッピング
+        lines = wrap_text(text, font, max_text_w)
+        
+        # 全体の高さを計算
+        total_h = 0
+        max_measured_w = 0
+        for line in lines:
+            bbox = font.getbbox(line or " ")
+            total_h += (bbox[3] - bbox[1]) + line_spacing
+            max_measured_w = max(max_measured_w, bbox[2] - bbox[0])
+            
+        if total_h <= area_h:
+            break
+        current_fontsize -= 5 # 収まらなければサイズを下げる
+
+    # 2. 描画
     img = Image.new('RGBA', size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # フォント読み込み
-    try:
-        font = ImageFont.truetype(font_path, fontsize)
-    except OSError:
-        font = ImageFont.load_default()
+    # 絵文字フォントの準備
+    emoji_font = None
+    emoji_font_path = get_emoji_font_path()
+    if emoji_font_path:
+        try:
+            emoji_font = ImageFont.truetype(emoji_font_path, current_fontsize)
+        except:
+            pass
+
+    # 中央配置のための開始位置
+    current_y = (area_h - total_h) / 2
     
-    # 中央配置計算
-    try:
-        bbox = draw.textbbox((0, 0), text, font=font)
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
-    except:
-        # Fallback for old PIL
-        text_w, text_h = draw.textsize(text, font=font)
-    
-    x = (size[0] - text_w) / 2
-    y = (size[1] - text_h) / 2
-    
-    # 背景矩形
-    if bg_color:
-        padding = 20
-        draw.rectangle(
-            [x - padding, y - padding, x + text_w + padding, y + text_h + padding],
-            fill=bg_color
-        )
-    
-    # 文字描画
-    # 視認性向上のため、縁取り（ストローク）を付ける
-    # 色によってストローク色を変える
     stroke_color = 'black'
     if color.lower() in ['black', '#000000', '#000'] or (color.startswith('#') and color.lower() < '#444'):
         stroke_color = 'white'
+
+    for line in lines:
+        if not line:
+            current_y += current_fontsize + line_spacing
+            continue
+            
+        bbox = font.getbbox(line)
+        line_w = bbox[2] - bbox[0]
+        line_h = bbox[3] - bbox[1]
+        current_x = (area_w - line_w) / 2
         
-    # 文字描画 (stroke_widthパラメータはPIL 4.2+で利用可能)
-    try:
-        draw.text((x, y), text, font=font, fill=color, stroke_width=4, stroke_fill=stroke_color)
-    except:
-        # 古いPILの場合のフォールバック (簡易影)
-        shadow_off = 3
-        draw.text((x+shadow_off, y+shadow_off), text, font=font, fill=stroke_color)
-        draw.text((x, y), text, font=font, fill=color)
+        # 背景矩形 (行単位)
+        if bg_color:
+            padding = 10
+            draw.rectangle(
+                [current_x - padding, current_y, current_x + line_w + padding, current_y + line_h + padding],
+                fill=bg_color
+            )
+            
+        # 文字描画 (絵文字対応の試み)
+        # PILの標準draw.textは統合された絵文字をうまく扱えない場合があるが、
+        # 最近のバージョン + 適切なフォント指定で改善される
+        try:
+            # emoji_fontがある場合はそれを使う（PIL.ImageDraw.textのfont引数は1つのみ）
+            # ここではメインフォントで描画を試みる
+            draw.text((current_x, current_y), line, font=font, fill=color, stroke_width=4, stroke_fill=stroke_color)
+        except:
+            # フォールバック
+            draw.text((current_x, current_y), line, font=font, fill=color)
+            
+        current_y += line_h + line_spacing
     
     return np.array(img)
 
